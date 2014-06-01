@@ -5,19 +5,18 @@ import urllib2
 import libtorrent as lt
 import time
 import os
+import json
+from episode_info import EpisodeInfo
 
-
-class EpisodeInfo():
-    link = None
+server_url = 'http://127.0.0.1:8080'
 
 
 def new_episode_uploaded():
-    if True: # Todo: parse server response
-        info = EpisodeInfo()
-        info.link='http://piratebaytorrents.info/10176973/Game_of_Thrones_S04E07_720p_HDTV_x264-KILLERS.10176973.TPB.torrent'
-        return info
-    else:
-        return None
+    response = urllib2.urlopen(server_url)
+    ep_json = json.loads(response.read())[0]
+    data = json.loads(ep_json)
+    ep_info = EpisodeInfo(video_link=data['video_link'])
+    return ep_info
 
 
 def download_torrent_file(tf_url, tf_path):
@@ -58,7 +57,7 @@ def main():
         time.sleep(60)
 
     tf_path = 'episode.torrent'
-    download_torrent_file(new_episode.link, tf_path)
+    download_torrent_file(new_episode.info['video_link'], tf_path)
 
     out_path = 'episode.mkv'
     download_episode(tf_path, out_path)
@@ -67,5 +66,4 @@ def main():
 
 
 if __name__ == '__main__':
-
     sys.exit(main())

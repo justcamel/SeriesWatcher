@@ -1,6 +1,16 @@
 import webapp2
 import urllib2
+import json
 import re
+import sys
+from episode_info import EpisodeInfo
+sys.path.append('beautifulsoup')
+from bs4 import BeautifulSoup as BS
+
+last_watched = EpisodeInfo(season_num=4, episode_num=6)
+
+def setLastWatched():
+	pass
 
 def fetchPage(url):
 	request = urllib2.Request(url, headers={'User-Agent':'Magic Browser'})
@@ -13,26 +23,47 @@ def fetchSeriesLink(url, name):
 	if found:
 		return url + found.group(1)[1:-1]
 
-def fetchTorrentLink(url, season, episode):
+def fetchNewEpisodes(url):
+	episodes_found = []
 	page_lines = fetchPage(url).split('\n')
-	s = str(season) if season > 9 else '0'+str(season)
-	e = str(episode) if episode > 9 else '0'+str(episode)
-	pattern = 'title=.*'+'S'+s+'E'+e
+	pattern_ep = 'title=.*S(\d\d)E(\d\d)'
+	patterns_props = ['720p', 'KILLERS']
 	for i, line in enumerate(page_lines):
-		if re.search(pattern, line):
-			found = re.search('a href=(\".*?\").*', page_lines[i+4])
-			if found:
-				return url + found.group(1)[1:-1]
+		found = re.search(pattern_ep, line)
+		if found:
+			for prop in patterns_props:
+				if prop not in line:
+					found = None
+					break
+		if found:
+			num_s = int(found.group(1))
+			num_e = int(found.group(2))
+			global last_watched
+			if num_s >= last_watched.info['season_num'] and \
+			   num_e > last_watched.info['episode_num']:
+				links_soup = BS('\n'.join(page_lines[i+1:i+5]))
+				link = links_soup.find(attrs={'title': 'Download Mirror #1'})['href']
+				if link:
+					episode = EpisodeInfo()
+					episode.info['season_num']=num_s
+					episode.info['episode_num']=num_e
+					episode.info['video_link']=link
+					print episode
+					episodes_found.append(episode)
+			elif not episodes_found:
+				return None
+			else:
+				# last_watched = episodes_found[-1]
+				return episodes_found
 
 class MainPage(webapp2.RequestHandler):
     def get(self):
-        self.response.headers['Content-Type'] = 'text/plain'
+        self.response.headers['Content-Type'] = 'application/json'
         resource = 'http://eztv.it'
         series_name = 'Game of Thrones'
-        season = 4
-        episode = 7
         slink = fetchSeriesLink(resource, series_name)
-        tlink = fetchTorrentLink(slink, season, episode)
-        self.response.write(tlink)
+        episodes = fetchNewEpisodes(slink)
+
+        self.response.write(json.dumps([ep.toJSON() for ep in episodes]))
 
 application = webapp2.WSGIApplication([('/', MainPage), ], debug=True)
